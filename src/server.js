@@ -1,18 +1,44 @@
 const express = require('express');
 const session = require('express-session');
+const KnexSessionStore = require('connect-session-knex')(session);
 const passport = require('./auth');
 const db = require('./database');
 const path = require('path');
+const knex = require('knex');
 require('dotenv').config();
 
 const app = express();
+
+// Konfigurasi Knex untuk penyimpanan sesi menggunakan SQLite
+const knexConfig = {
+  client: 'sqlite3',
+  connection: {
+    filename: process.env.VERCEL ? '/tmp/passwords.db' : path.join(__dirname, 'passwords.db')
+  },
+  useNullAsDefault: true
+};
+
+const knexInstance = knex(knexConfig);
+
+// Inisialisasi penyimpanan sesi
+const store = new KnexSessionStore({
+  knex: knexInstance,
+  tablename: 'sessions',
+  createtable: true,
+  clearInterval: 1000 * 60 * 60 // Bersihkan sesi kadaluarsa setiap jam
+});
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
   secret: process.env.SESSION_SECRET,
   resave: false,
-  saveUninitialized: false
+  saveUninitialized: false,
+  store: store,
+  cookie: {
+    secure: process.env.VERCEL ? true : false, // Gunakan secure cookie di Vercel (HTTPS)
+    maxAge: 24 * 60 * 60 * 1000 // 24 jam
+  }
 }));
 app.use(passport.initialize());
 app.use(passport.session());
