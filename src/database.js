@@ -1,57 +1,64 @@
-// src/database.js
 const knex = require('knex');
 require('dotenv').config();
 
-// Knex configuration optimized for Vercel serverless environment
 const db = knex({
   client: 'pg',
   connection: process.env.POSTGRES_URL,
   useNullAsDefault: true,
   pool: {
-    min: 0, // Start with no connections for serverless
-    max: 7, // Keep max connections well below Vercel's limit of 20
-    acquireTimeoutMillis: 10000, // Increase timeout for connection acquisition
-    idleTimeoutMillis: 10000, // Reduce idle timeout for serverless environment
-    createTimeoutMillis: 10000, // Timeout for creating new connections
-    destroyTimeoutMillis: 5000, // Timeout for destroying connections
-    reapIntervalMillis: 1000, // Check for idle connections every second
+    min: 2,
+    max: 10,
+    acquireTimeoutMillis: 5000,
+    idleTimeoutMillis: 30000,
+    reapIntervalMillis: 1000,
   },
-  acquireConnectionTimeout: 10000 // Global timeout for connection acquisition
+  acquireConnectionTimeout: 5000
 });
 
-// Create passwords table if it doesn't exist
+// Setup database tables
 const setupDatabase = async () => {
   try {
-    console.log('Checking database connection and tables...');
-    
-    // First check if we can connect
-    await db.raw('SELECT 1');
-    console.log('Database connection successful');
-    
-    // Check if table exists
-    const exists = await db.schema.hasTable('passwords');
-    if (!exists) {
-      console.log('Creating passwords table...');
-      await db.schema.createTable('passwords', table => {
+    // Create users table if not exists
+    const usersExists = await db.schema.hasTable('users');
+    if (!usersExists) {
+      await db.schema.createTable('users', table => {
         table.increments('id').primary();
-        table.string('user_id').notNullable().index();
-        table.string('website').notNullable();
-        table.string('username').notNullable();
-        table.string('password').notNullable();
+        table.string('google_id').unique();
+        table.string('display_name');
+        table.string('email');
         table.timestamps(true, true);
       });
-      console.log('Passwords table created successfully');
-    } else {
-      console.log('Passwords table already exists');
+      console.log('Created users table');
     }
-    
-    console.log('Database setup completed successfully');
-    return true;
+
+    // Create passwords table if not exists
+    const passwordsExists = await db.schema.hasTable('passwords');
+    if (!passwordsExists) {
+      await db.schema.createTable('passwords', table => {
+        table.increments('id').primary();
+        table.integer('user_id').unsigned().references('id').inTable('users');
+        table.string('website');
+        table.string('username');
+        table.string('password');
+        table.timestamps(true, true);
+      });
+      console.log('Created passwords table');
+    }
+
+    // Create sessions table if not exists
+    const sessionsExists = await db.schema.hasTable('sessions');
+    if (!sessionsExists) {
+      await db.schema.createTable('sessions', table => {
+        table.string('sid').primary();
+        table.json('sess').notNullable();
+        table.timestamp('expired').notNullable().index();
+      });
+      console.log('Created sessions table');
+    }
   } catch (err) {
-    console.error('Error setting up database:', err.message);
-    return false;
+    console.error('Database setup error:', err);
+    throw err;
   }
 };
 
-// Export both the db connection and setup function
 module.exports = { db, setupDatabase };
