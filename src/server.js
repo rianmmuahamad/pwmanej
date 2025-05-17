@@ -42,15 +42,22 @@ const store = new KnexSessionStore({
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Enable trust proxy for Vercel (important for session cookies behind proxy)
+app.set('trust proxy', 1);
+
 app.use(session({
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   store: store,
+  proxy: true, // Trust the reverse proxy
   cookie: {
     secure: isVercel, // Only use secure cookies in production (HTTPS)
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: 'lax'
+    sameSite: 'lax',
+    path: '/',
+    httpOnly: true
   }
 }));
 app.use(passport.initialize());
@@ -59,8 +66,19 @@ app.use(express.static('public'));
 
 // Middleware for authentication check
 const isAuthenticated = (req, res, next) => {
+  console.log('Auth check - isAuthenticated:', req.isAuthenticated());
+  console.log('Auth check - session:', req.session);
+  console.log('Auth check - user:', req.user);
+  
   if (req.isAuthenticated()) return next();
-  res.status(401).json({ error: 'Authentication required' });
+  
+  // For API routes, return JSON error
+  if (req.path.startsWith('/api/')) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  // For page routes, redirect to login
+  res.redirect('/');
 };
 
 // Setup database and tables before starting the server
@@ -93,18 +111,36 @@ const initializeApp = async () => {
 const setupRoutes = () => {
   // Home page (login)
   app.get('/', (req, res) => {
+    // If already authenticated, redirect to dashboard
+    if (req.isAuthenticated()) {
+      return res.redirect('/dashboard');
+    }
     res.sendFile(path.join(__dirname, '../public/index.html'));
   });
 
   // Google OAuth routes
   app.get('/auth/google',
-    passport.authenticate('google', { scope: ['profile', 'email'] })
+    (req, res, next) => {
+      console.log('Initiating Google OAuth flow');
+      next();
+    },
+    passport.authenticate('google', { 
+      scope: ['profile', 'email'],
+      prompt: 'select_account' // Always show account selection screen
+    })
   );
 
   app.get('/auth/google/callback',
-    passport.authenticate('google', { failureRedirect: '/' }),
+    (req, res, next) => {
+      console.log('Google callback received');
+      next();
+    },
+    passport.authenticate('google', { 
+      failureRedirect: '/',
+      failureFlash: false 
+    }),
     (req, res) => {
-      console.log('Google authentication successful');
+      console.log('Google authentication successful. User:', req.user?.display_name);
       res.redirect('/dashboard');
     }
   );
