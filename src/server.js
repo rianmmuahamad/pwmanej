@@ -80,6 +80,7 @@ app.get('/', (req, res) => {
 });
 
 // Rute autentikasi Google
+// Rute autentikasi Google
 app.get('/auth/google',
   passport.authenticate('google', { scope: ['profile', 'email'] })
 );
@@ -87,7 +88,12 @@ app.get('/auth/google',
 app.get('/auth/google/callback',
   passport.authenticate('google', { failureRedirect: '/' }),
   (req, res) => {
+    console.log('Google OAuth callback successful, user:', req.user);
     res.redirect('/dashboard');
+  },
+  (err, req, res, next) => {
+    console.error('Error in Google OAuth callback:', err.message);
+    res.redirect('/');
   }
 );
 
