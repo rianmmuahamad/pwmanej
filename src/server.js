@@ -1,57 +1,45 @@
+// src/server.js
 const express = require('express');
 const session = require('express-session');
 const connectSessionKnex = require('connect-session-knex');
-const passport = require('./auth');
-const db = require('./database');
 const path = require('path');
-const knex = require('knex');
 require('dotenv').config();
+
+// Import database and auth modules
+const { db, setupDatabase } = require('./database');
+const { passport, setupAuthTable } = require('./auth');
 
 const app = express();
 
-// Log untuk debugging
-console.log('Environment Variables:', {
-  POSTGRES_URL: process.env.POSTGRES_URL,
-  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
-  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
-  SESSION_SECRET: process.env.SESSION_SECRET,
-  VERCEL: process.env.VERCEL,
-  VERCEL_ENV: process.env.VERCEL_ENV
-});
+// Determine environment (Vercel vs local)
+const isVercel = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview';
+console.log(`Running in ${isVercel ? 'Vercel' : 'local'} environment`);
 
-// Pastikan SESSION_SECRET ada
+// Validate required environment variables
 if (!process.env.SESSION_SECRET) {
   throw new Error('SESSION_SECRET is required in environment variables');
 }
 
-// Konfigurasi Knex untuk penyimpanan sesi
-const knexConfig = {
-  client: 'pg',
-  connection: process.env.POSTGRES_URL,
-  useNullAsDefault: true,
-  pool: {
-    min: 2,
-    max: 10,
-    acquireTimeoutMillis: 5000,
-    idleTimeoutMillis: 30000,
-    reapIntervalMillis: 1000,
-  },
-};
+if (!process.env.POSTGRES_URL) {
+  throw new Error('POSTGRES_URL is required in environment variables');
+}
 
-const knexInstance = knex(knexConfig);
+if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+  console.warn('Google OAuth credentials missing. Authentication will not work properly.');
+}
 
-// Inisialisasi penyimpanan sesi
+// Initialize session store
 const KnexSessionStore = connectSessionKnex(session);
 const store = new KnexSessionStore({
-  knex: knexInstance,
+  knex: db,
   tablename: 'sessions',
   createtable: true,
-  clearInterval: 1000 * 60 * 60 // Bersihkan sesi kadaluarsa setiap jam
+  sidfieldname: 'sid',
+  clearInterval: 60000, // Clear expired sessions every minute
+  maxAge: 24 * 60 * 60 * 1000 // 24 hours
 });
 
-// Tentukan apakah di Vercel
-const isVercel = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview';
-
+// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
@@ -60,115 +48,230 @@ app.use(session({
   saveUninitialized: false,
   store: store,
   cookie: {
-    secure: isVercel, // true di Vercel (HTTPS), false di lokal (HTTP)
-    maxAge: 24 * 60 * 60 * 1000 // 24 jam
+    secure: isVercel, // Only use secure cookies in production (HTTPS)
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: 'lax'
   }
 }));
 app.use(passport.initialize());
 app.use(passport.session());
 app.use(express.static('public'));
 
-// Middleware untuk cek autentikasi
+// Middleware for authentication check
 const isAuthenticated = (req, res, next) => {
   if (req.isAuthenticated()) return next();
-  res.redirect('/');
+  res.status(401).json({ error: 'Authentication required' });
 };
 
-// Rute halaman login
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/index.html'));
-});
-
-// Rute autentikasi Google
-// Rute autentikasi Google
-app.get('/auth/google',
-  passport.authenticate('google', { scope: ['profile', 'email'] })
-);
-
-app.get('/auth/google/callback',
-  passport.authenticate('google', { failureRedirect: '/' }),
-  (req, res) => {
-    console.log('Google OAuth callback successful, user:', req.user);
-    res.redirect('/dashboard');
-  },
-  (err, req, res, next) => {
-    console.error('Error in Google OAuth callback:', err.message);
-    res.redirect('/');
-  }
-);
-
-// Rute dashboard
-app.get('/dashboard', isAuthenticated, (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/dashboard.html'));
-});
-
-// Rute untuk mendapatkan data pengguna
-app.get('/api/user', isAuthenticated, (req, res) => {
-  console.log('User in /api/user:', req.user);
-  if (!req.user || !req.user.displayName) {
-    return res.status(401).json({ error: 'User not authenticated or profile incomplete' });
-  }
-  res.json({ displayName: req.user.displayName });
-});
-
-// API untuk manajemen password
-app.get('/api/passwords', isAuthenticated, async (req, res) => {
+// Setup database and tables before starting the server
+const initializeApp = async () => {
   try {
-    const rows = await db('passwords').where({ user_id: req.user.id });
-    res.json(rows);
-  } catch (err) {
-    console.error('Error fetching passwords:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/api/passwords', isAuthenticated, async (req, res) => {
-  const { website, username, password } = req.body;
-  try {
-    await db('passwords').insert({
-      user_id: req.user.id,
-      website,
-      username,
-      password
+    // Setup database tables
+    const dbSetup = await setupDatabase();
+    const authSetup = await setupAuthTable();
+    
+    if (!dbSetup || !authSetup) {
+      console.error('Failed to setup database tables');
+      process.exit(1);
+    }
+    
+    // Routes
+    setupRoutes();
+    
+    // Start server
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => {
+      console.log(`Server running on http://localhost:${PORT}`);
     });
-    res.status(201).json({ message: 'Password saved' });
   } catch (err) {
-    console.error('Error saving password:', err.message);
-    res.status(500).json({ error: err.message });
+    console.error('Failed to initialize application:', err);
+    process.exit(1);
   }
+};
+
+// Set up all routes
+const setupRoutes = () => {
+  // Home page (login)
+  app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '../public/index.html'));
+  });
+
+  // Google OAuth routes
+  app.get('/auth/google',
+    passport.authenticate('google', { scope: ['profile', 'email'] })
+  );
+
+  app.get('/auth/google/callback',
+    passport.authenticate('google', { failureRedirect: '/' }),
+    (req, res) => {
+      console.log('Google authentication successful');
+      res.redirect('/dashboard');
+    }
+  );
+
+  // Dashboard
+  app.get('/dashboard', isAuthenticated, (req, res) => {
+    res.sendFile(path.join(__dirname, '../public/dashboard.html'));
+  });
+
+  // API Routes
+  app.get('/api/user', isAuthenticated, (req, res) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+    res.json({
+      id: req.user.id,
+      displayName: req.user.display_name,
+      email: req.user.email
+    });
+  });
+
+  // Password management API
+  app.get('/api/passwords', isAuthenticated, async (req, res) => {
+    try {
+      const passwords = await db('passwords')
+        .where({ user_id: req.user.id })
+        .select('id', 'website', 'username', 'password');
+      res.json(passwords);
+    } catch (err) {
+      console.error('Error fetching passwords:', err.message);
+      res.status(500).json({ error: 'Failed to fetch passwords' });
+    }
+  });
+
+  app.post('/api/passwords', isAuthenticated, async (req, res) => {
+    const { website, username, password } = req.body;
+    
+    // Validate request
+    if (!website || !username || !password) {
+      return res.status(400).json({ error: 'Website, username and password are required' });
+    }
+    
+    try {
+      // Use a transaction to ensure database consistency
+      await db.transaction(async trx => {
+        const [id] = await trx('passwords').insert({
+          user_id: req.user.id,
+          website,
+          username,
+          password
+        }).returning('id');
+        
+        res.status(201).json({ 
+          id, 
+          message: 'Password saved successfully' 
+        });
+      });
+    } catch (err) {
+      console.error('Error saving password:', err.message);
+      res.status(500).json({ error: 'Failed to save password' });
+    }
+  });
+
+  app.put('/api/passwords/:id', isAuthenticated, async (req, res) => {
+    const { id } = req.params;
+    const { website, username, password } = req.body;
+    
+    // Validate request
+    if (!website || !username || !password) {
+      return res.status(400).json({ error: 'Website, username and password are required' });
+    }
+    
+    try {
+      // Use transaction for consistency
+      await db.transaction(async trx => {
+        // First check if password exists and belongs to user
+        const existing = await trx('passwords')
+          .where({ id, user_id: req.user.id })
+          .first();
+          
+        if (!existing) {
+          return res.status(404).json({ error: 'Password not found or access denied' });
+        }
+        
+        await trx('passwords')
+          .where({ id, user_id: req.user.id })
+          .update({ website, username, password });
+          
+        res.json({ message: 'Password updated successfully' });
+      });
+    } catch (err) {
+      console.error('Error updating password:', err.message);
+      res.status(500).json({ error: 'Failed to update password' });
+    }
+  });
+
+  app.delete('/api/passwords/:id', isAuthenticated, async (req, res) => {
+    const { id } = req.params;
+    
+    try {
+      // Use transaction for consistency
+      await db.transaction(async trx => {
+        // Check if password exists and belongs to user
+        const existing = await trx('passwords')
+          .where({ id, user_id: req.user.id })
+          .first();
+          
+        if (!existing) {
+          return res.status(404).json({ error: 'Password not found or access denied' });
+        }
+        
+        await trx('passwords')
+          .where({ id, user_id: req.user.id })
+          .del();
+          
+        res.json({ message: 'Password deleted successfully' });
+      });
+    } catch (err) {
+      console.error('Error deleting password:', err.message);
+      res.status(500).json({ error: 'Failed to delete password' });
+    }
+  });
+
+  // Logout
+  app.get('/logout', (req, res) => {
+    req.logout((err) => {
+      if (err) {
+        console.error('Error during logout:', err);
+        return res.status(500).json({ error: 'Failed to logout' });
+      }
+      res.redirect('/');
+    });
+  });
+
+  // Health check endpoint for Vercel
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  // Handle 404
+  app.use((req, res) => {
+    res.status(404).json({ error: 'Not found' });
+  });
+  
+  // Error handler
+  app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  });
+};
+
+// Start the application
+initializeApp().catch(err => {
+  console.error('Failed to start application:', err);
+  process.exit(1);
 });
 
-app.put('/api/passwords/:id', isAuthenticated, async (req, res) => {
-  const { website, username, password } = req.body;
-  try {
-    await db('passwords')
-      .where({ id: req.params.id, user_id: req.user.id })
-      .update({ website, username, password });
-    res.json({ message: 'Password updated' });
-  } catch (err) {
-    console.error('Error updating password:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.delete('/api/passwords/:id', isAuthenticated, async (req, res) => {
-  try {
-    await db('passwords')
-      .where({ id: req.params.id, user_id: req.user.id })
-      .del();
-    res.json({ message: 'Password deleted' });
-  } catch (err) {
-    console.error('Error deleting password:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Rute logout
-app.get('/logout', (req, res) => {
-  req.logout((err) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.redirect('/');
+// Handle graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received. Shutting down gracefully...');
+  db.destroy().then(() => {
+    console.log('Database connections closed.');
+    process.exit(0);
   });
 });
 
-app.listen(3000, () => console.log('Server running on http://localhost:3000'));
+// For development error handling
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
