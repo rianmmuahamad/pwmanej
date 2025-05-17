@@ -11,6 +11,13 @@ const { passport, setupAuthTable } = require('./auth');
 
 const app = express();
 
+// Log request information for debugging
+app.use((req, res, next) => {
+  const requestPath = req.originalUrl || req.url;
+  console.log(`${new Date().toISOString()} - ${req.method} ${requestPath}`);
+  next();
+});
+
 // Determine environment (Vercel vs local)
 const isVercel = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview';
 console.log(`Running in ${isVercel ? 'Vercel' : 'local'} environment`);
@@ -36,7 +43,10 @@ const store = new KnexSessionStore({
   createtable: true,
   sidfieldname: 'sid',
   clearInterval: 60000, // Clear expired sessions every minute
-  maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  maxAge: 24 * 60 * 60 * 1000, // 24 hours
+  // Make sure serialization works correctly
+  serializer: JSON.stringify,
+  deserializer: JSON.parse
 });
 
 // Middleware
@@ -81,17 +91,51 @@ const isAuthenticated = (req, res, next) => {
   res.redirect('/');
 };
 
-// Setup database and tables before starting the server
-const initializeApp = async () => {
-  try {
-    // Setup database tables
-    const dbSetup = await setupDatabase();
-    const authSetup = await setupAuthTable();
-    
-    if (!dbSetup || !authSetup) {
-      console.error('Failed to setup database tables');
-      process.exit(1);
+  // Try to set up necessary database tables
+  const setupTables = async () => {
+    // Create users table if it doesn't exist
+    const usersExists = await db.schema.hasTable('users');
+    if (!usersExists) {
+      console.log('Creating users table...');
+      await db.schema.createTable('users', table => {
+        table.increments('id').primary();
+        table.string('google_id').unique().notNullable();
+        table.string('display_name').notNullable();
+        table.string('email');
+        table.timestamps(true, true);
+      });
+      console.log('Users table created successfully');
     }
+    
+    // Create passwords table if it doesn't exist
+    const passwordsExists = await db.schema.hasTable('passwords');
+    if (!passwordsExists) {
+      console.log('Creating passwords table...');
+      await db.schema.createTable('passwords', table => {
+        table.increments('id').primary();
+        table.integer('user_id').notNullable().index();
+        table.string('website').notNullable();
+        table.string('username').notNullable();
+        table.string('password').notNullable();
+        table.timestamps(true, true);
+      });
+      console.log('Passwords table created successfully');
+    }
+    
+    // Create sessions table if it doesn't exist
+    const sessionsExists = await db.schema.hasTable('sessions');
+    if (!sessionsExists) {
+      console.log('Creating sessions table...');
+      await db.schema.createTable('sessions', table => {
+        table.string('sid').primary();
+        table.json('sess').notNullable();
+        table.timestamp('expired').notNullable().index();
+      });
+      console.log('Sessions table created successfully');
+    }
+    
+    return true;
+  };
     
     // Routes
     setupRoutes();
@@ -141,6 +185,13 @@ const setupRoutes = () => {
     }),
     (req, res) => {
       console.log('Google authentication successful. User:', req.user?.display_name);
+      
+      // Add debug info to session to track issues
+      if (req.session) {
+        req.session.authTime = new Date().toISOString();
+        req.session.authSuccess = true;
+      }
+      
       res.redirect('/dashboard');
     }
   );
