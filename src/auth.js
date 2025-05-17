@@ -8,7 +8,7 @@ console.log('VERCEL_ENV:', process.env.VERCEL_ENV);
 // Tentukan callbackURL berdasarkan VERCEL_ENV
 const isVercel = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview';
 const callbackURL = isVercel 
-  ? 'https://your-vercel-app.vercel.app/auth/google/callback' 
+  ? 'https://pwmanej.vercel.app/auth/google/callback' 
   : 'http://localhost:3000/auth/google/callback';
 
 console.log('Is Vercel environment:', isVercel);
