@@ -1,6 +1,6 @@
 const express = require('express');
 const session = require('express-session');
-const KnexSessionStore = require('connect-session-knex')(session);
+const connectSessionKnex = require('connect-session-knex');
 const passport = require('./auth');
 const db = require('./database');
 const path = require('path');
@@ -20,7 +20,8 @@ const knexConfig = {
 
 const knexInstance = knex(knexConfig);
 
-// Inisialisasi penyimpanan sesi
+// Inisialisasi penyimpanan sesi dengan connect-session-knex
+const KnexSessionStore = connectSessionKnex(session);
 const store = new KnexSessionStore({
   knex: knexInstance,
   tablename: 'sessions',
