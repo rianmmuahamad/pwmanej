@@ -28,7 +28,14 @@ if (!process.env.SESSION_SECRET) {
 const knexConfig = {
   client: 'pg',
   connection: process.env.POSTGRES_URL,
-  useNullAsDefault: true
+  useNullAsDefault: true,
+  pool: {
+    min: 2,
+    max: 10,
+    acquireTimeoutMillis: 5000,
+    idleTimeoutMillis: 30000,
+    reapIntervalMillis: 1000,
+  },
 };
 
 const knexInstance = knex(knexConfig);
@@ -91,6 +98,10 @@ app.get('/dashboard', isAuthenticated, (req, res) => {
 
 // Rute untuk mendapatkan data pengguna
 app.get('/api/user', isAuthenticated, (req, res) => {
+  console.log('User in /api/user:', req.user);
+  if (!req.user || !req.user.displayName) {
+    return res.status(401).json({ error: 'User not authenticated or profile incomplete' });
+  }
   res.json({ displayName: req.user.displayName });
 });
 
@@ -100,6 +111,7 @@ app.get('/api/passwords', isAuthenticated, async (req, res) => {
     const rows = await db('passwords').where({ user_id: req.user.id });
     res.json(rows);
   } catch (err) {
+    console.error('Error fetching passwords:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -115,6 +127,7 @@ app.post('/api/passwords', isAuthenticated, async (req, res) => {
     });
     res.status(201).json({ message: 'Password saved' });
   } catch (err) {
+    console.error('Error saving password:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -127,6 +140,7 @@ app.put('/api/passwords/:id', isAuthenticated, async (req, res) => {
       .update({ website, username, password });
     res.json({ message: 'Password updated' });
   } catch (err) {
+    console.error('Error updating password:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -138,6 +152,7 @@ app.delete('/api/passwords/:id', isAuthenticated, async (req, res) => {
       .del();
     res.json({ message: 'Password deleted' });
   } catch (err) {
+    console.error('Error deleting password:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
