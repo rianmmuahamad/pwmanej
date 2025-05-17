@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Password Manager - Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              200: '#bae6fd',
+              300: '#7dd3fc',
+              400: '#38bdf8',
+              500: '#0ea5e9',
+              600: '#0284c7',
+              700: '#0369a1',
+              800: '#075985',
+              900: '#0c4a6e',
+            },
+            dark: {
+              800: '#1e293b',
+              900: '#0f172a',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          boxShadow: {
+            'soft': '0 4px 24px 0 rgba(0, 0, 0, 0.08)',
+            'soft-lg': '0 8px 32px 0 rgba(0, 0, 0, 0.12)',
+          },
+          animation: {
+            'fade-in': 'fadeIn 0.3s ease-out forwards',
+            'fade-out': 'fadeOut 0.3s ease-out forwards',
+            'slide-up': 'slideUp 0.3s ease-out forwards',
+            'slide-down': 'slideDown 0.3s ease-out forwards',
+          },
+          keyframes: {
+            fadeIn: {
+              'from': { opacity: 0, transform: 'translateY(10px)' },
+              'to': { opacity: 1, transform: 'translateY(0)' }
+            },
+            fadeOut: {
+              'from': { opacity: 1, transform: 'translateY(0)' },
+              'to': { opacity: 0, transform: 'translateY(10px)' }
+            },
+            slideUp: {
+              'from': { opacity: 0, transform: 'translateY(20px)' },
+              'to': { opacity: 1, transform: 'translateY(0)' }
+            },
+            slideDown: {
+              'from': { opacity: 1, transform: 'translateY(0)' },
+              'to': { opacity: 0, transform: 'translateY(20px)' }
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #f8fafc;
+    }
+    .password-card {
+      transition: all 0.2s ease;
+    }
+    .password-card:hover {
+      transform: translateY(-2px);
+    }
+    .password-strength {
+      height: 4px;
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+    .password-strength.weak {
+      background-color: #ef4444;
+      width: 30%;
+    }
+    .password-strength.medium {
+      background-color: #f59e0b;
+      width: 60%;
+    }
+    .password-strength.strong {
+      background-color: #10b981;
+      width: 90%;
+    }
+    .password-strength.very-strong {
+      background-color: #10b981;
+      width: 100%;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 10px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 10px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #a1a1a1;
+    }
+    .password-toggle {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      cursorittura: pointer;
+      color: #94a3b8;
+    }
+    .password-toggle:hover {
+      color: #64748b;
+    }
+    .hidden-password {
+      filter: blur(4px);
+      transition: filter 0.3s ease;
+    }
+    .hidden-password:hover {
+      filter: blur(0);
+    }
+    .popup-open {
+      animation: slideUp 0.2s ease-out forwards;
+    }
+  </style>
+</head>
+<body class="min-h-screen font-sans bg-gray-50">
+  <!-- Navbar -->
+  <nav class="bg-white shadow-sm sticky top-0 z-50 border-b border-gray-100 backdrop-blur-sm bg-opacity-90">
+    <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+      <div class="flex items-center space-x-2">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-r from-blue-500 to-blue-700 flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+        </div>
+        <h1 class="text-xl font-bold text-gray-800">Password Manager</h1>
+      </div>
+      <div class="relative flex items-center space-x-4">
+        <div id="user-profile" class="flex items-center space-x-2 cursor-pointer group" aria-haspopup="true" aria-expanded="false">
+          <span id="user-name" class="text-sm font-medium text-gray-700 group-hover:text-blue-600 transition hidden sm:block"></span>
+          <div class="w-9 h-9 rounded-full bg-gradient-to-r from-blue-500 to-blue-700 text-white flex items-center justify-center group-hover:opacity-90 transition">
+            <span id="user-initial" class="font-medium"></span>
+          </div>
+        </div>
+        <div id="profile-popup" class="absolute right-0 top-12 bg-white rounded-lg shadow-lg w-64 p-4 hidden z-30 popup-open">
+          <div class="flex items-center space-x-3 mb-4">
+            <div class="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-blue-700 text-white flex items-center justify-center">
+              <span id="popup-user-initial" class="text-sm font-semibold"></span>
+            </div>
+            <div>
+              <p id="popup-user-name" class="text-sm font-semibold text-gray-800"></p>
+            </div>
+          </div>
+          <a href="/logout" class="block bg-gradient-to-r from-red-500 to-red-600 text-white px-4 py-2 rounded-lg hover:from-red-600 hover:to-red-700 btn text-center text-sm font-medium">Logout</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <div class="container mx-auto p-4 sm:p-6 max-w-6xl">
+    <div class="bg-white p-6 rounded-xl shadow-soft border border-gray-100">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <div>
+          <h2 class="text-2xl font-bold text-gray-800">Password Vault</h2>
+          <p class="text-gray-500 text-sm mt-1">Securely store and manage your login credentials</p>
+        </div>
+        <div class="w-full sm:w-1/3 relative">
+          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <input type="text" id="search" placeholder="Search passwords..." class="border border-gray-200 pl-10 p-3 rounded-lg w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-sm shadow-sm">
+        </div>
+      </div>
+
+      <!-- Add Password Card -->
+      <div class="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-100 p-5 rounded-xl mb-8 shadow-inner">
+        <h3 class="text-lg font-semibold text-blue-800 mb-3 flex items-center">
+          <i class="fas fa-plus-circle mr-2"></i> Add New Password
+        </h3>
+        <form id="password-form">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+            <div>
+              <label for="website" class="block text-sm font-medium text-gray-700 mb-1.5">Website</label>
+              <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <i class="fas fa-globe text-gray-400"></i>
+                </div>
+                <input type="text" id="website" placeholder="example.com" class="text-sm border border-gray-200 pl-10 p-3 rounded-lg w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition shadow-sm" required>
+              </div>
+            </div>
+            <div>
+              <label for="username" class="block text-sm font-medium text-gray-700 mb-1.5">Username/Email</label>
+              <div class="relative">
+                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <i class="fas fa-user text-gray-400"></i>
+                </div>
+                <input type="text" id="username" placeholder="your_username" class="text-sm border border-gray-200 pl-10 p-3 rounded-lg w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition shadow-sm" required>
+              </div>
+            </div>
+            <div>
+              <label for="password" class="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
+              <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <i class="fas fa-lock text-gray-400"></i>
+                </div>
+                <input type="password" id="password" placeholder="Enter password" class="text-sm border border-gray-200 pl-10 pr-10 p-3 rounded-lg w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition shadow-sm" required>
+                <span class="password-toggle" onclick="togglePasswordVisibility('password')">
+                  <i class="far fa-eye"></i>
+                </span>
+              </div>
+              <div class="mt-1.5 flex items-center justify-between">
+                <div class="w-full bg-gray-200 rounded-full h-1.5">
+                  <div id="password-strength-bar" class="password-strength h-1.5 rounded-full"></div>
+                </div>
+                <span id="password-strength-text" class="text-xs ml-2 text-gray-500">Weak</span>
+              </div>
+            </div>
+          </div>
+          <div class="flex justify-end">
+            <button type="submit" class="bg-gradient-to-r from-blue-500 to-blue-700 text-white px-5 py-3 rounded-lg hover:from-blue-600 hover:to-blue-800 transition flex items-center space-x-2 shadow-md hover:shadow-lg">
+              <i class="fas fa-save"></i>
+              <span>Save Password</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Password List Section -->
+      <div class="border-t border-gray-100 pt-6">
+        <div class="flex justify-between items-center mb-4">
+          <div>
+            <h2 class="text-xl font-bold text-gray-800">Your Passwords</h2>
+            <p class="text-gray-500 text-sm mt-1" id="password-count">0 passwords stored</p>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button onclick="generateRandomPassword()" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg transition flex items-center space-x-1">
+              <i class="fas fa-random text-xs"></i>
+              <span>Generate Password</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="empty-state" class="text-center py-12 hidden">
+          <div class="mx-auto w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mb-4">
+            <i class="fas fa-key text-3xl text-blue-500"></i>
+          </div>
+          <h3 class="text-lg font-medium text-gray-900">No passwords yet</h3>
+          <p class="text-gray-500 mt-1 max-w-md mx-auto">Get started by adding your first password. All your data is encrypted and securely stored.</p>
+          <button onclick="document.getElementById('website').focus()" class="mt-4 bg-gradient-to-r from-blue-500 to-blue-700 text-white px-4 py-2 rounded-lg hover:from-blue-600 hover:to-blue-800 transition inline-flex items-center">
+            <i class="fas fa-plus mr-2"></i> Add Password
+          </button>
+        </div>
+
+        <!-- Password List -->
+        <div id="password-list" class="grid grid-cols-1 gap-3"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generate Password Modal -->
+  <div id="generate-password-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-xl p-6 w-full max-w-md animate-slide-up">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-bold text-gray-800">Generate Secure Password</h3>
+        <button onclick="closeGeneratePasswordModal()" class="text-gray-400 hover:text-gray-500">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="mb-4">
+        <div class="flex justify-between items-center mb-2">
+          <label class="text-sm font-medium text-gray-700">Password Length</label>
+          <span id="length-value" class="text-sm font-medium text-blue-600">12</span>
+        </div>
+        <input type="range" id="password-length" min="8" max="24" value="12" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+      </div>
+      <div class="space-y-2 mb-4">
+        <label class="flex items-center space-x-2">
+          <input type="checkbox" id="uppercase" checked class="rounded text-blue-600">
+          <span class="text-sm text-gray-700">Include Uppercase (A-Z)</span>
+        </label>
+        <label class="flex items-center space-x-2">
+          <input type="checkbox" id="lowercase" checked class="rounded text-blue-600">
+          <span class="text-sm text-gray-700">Include Lowercase (a-z)</span>
+        </label>
+        <label class="flex items-center space-x-2">
+          <input type="checkbox" id="numbers" checked class="rounded text-blue-600">
+          <span class="text-sm text-gray-700">Include Numbers (0-9)</span>
+        </label>
+        <label class="flex items-center space-x-2">
+          <input type="checkbox" id="symbols" checked class="rounded text-blue-600">
+          <span class="text-sm text-gray-700">Include Symbols (!@#$%)</span>
+        </label>
+      </div>
+      <div class="bg-gray-50 p-3 rounded-lg mb-4">
+        <div class="flex items-center justify-between">
+          <input type="text" id="generated-password" readonly class="bg-transparent border-none w-full font-mono text-sm outline-none">
+          <button onclick="copyGeneratedPassword()" class="text-blue-600 hover:text-blue-700 ml-2">
+            <i class="far fa-copy"></i>
+          </button>
+        </div>
+      </div>
+      <div class="flex justify-end space-x-3">
+        <button onclick="closeGeneratePasswordModal()" class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">
+          Cancel
+        </button>
+        <button onclick="useGeneratedPassword()" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-700 text-white rounded-lg hover:from-blue-600 hover:to-blue-800 transition">
+          Use Password
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Password Modal -->
+  <div id="edit-password-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-xl p-6 w-full max-w-md animate-slide-up">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-bold text-gray-800">Edit Password</h3>
+        <button onclick="closeEditPasswordModal()" class="text-gray-400 hover:text-gray-500">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="space-y-4">
+        <input type="hidden" id="edit-id">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Website</label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <i class="fas fa-globe text-gray-400"></i>
+            </div>
+            <input type="text" id="edit-website" class="text-sm border border-gray-200 pl-10 p-3 rounded-lg w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition shadow-sm" required>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Username/Email</label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <i class="fas fa-user text-gray-400"></i>
+            </div>
+            <input type="text" id="edit-username" class="text-sm border border-gray-200 pl-10 p-3 rounded-lg w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition shadow-sm" required>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <i class="fas fa-lock text-gray-400"></i>
+            </div>
+            <input type="password" id="edit-password" class="text-sm border border-gray-200 pl-10 pr-10 p-3 rounded-lg w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition shadow-sm" required>
+            <span class="password-toggle" onclick="togglePasswordVisibility('edit-password')">
+              <i class="far fa-eye"></i>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="flex justify-end space-x-3 mt-6">
+        <button onclick="closeEditPasswordModal()" class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">
+          Cancel
+        </button>
+        <button onclick="saveEditedPassword()" class="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-700 text-white rounded-lg hover:from-blue-600 hover:to-blue-800 transition">
+          Save Changes
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // User Profile
+    async function loadUserProfile() {
+      try {
+        const response = await fetch('/api/user');
+        const user = await response.json();
+        document.getElementById('user-name').textContent = user.displayName;
+        document.getElementById('user-initial').textContent = user.displayName.charAt(0).toUpperCase();
+        document.getElementById('popup-user-name').textContent = user.displayName;
+        document.getElementById('popup-user-initial').textContent = user.displayName.charAt(0).toUpperCase();
+      } catch (error) {
+        console.error('Error loading user profile:', error);
+        showNotification('Failed to load user profile', 'error');
+      }
+    }
+
+    // Profile Popup Toggle
+    const userProfile = document.getElementById('user-profile');
+    const profilePopup = document.getElementById('profile-popup');
+
+    userProfile.addEventListener('click', (e) => {
+      e.stopPropagation();
+      profilePopup.classList.toggle('hidden');
+      profilePopup.classList.toggle('popup-open');
+      userProfile.setAttribute('aria-expanded', !profilePopup.classList.contains('hidden'));
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!userProfile.contains(e.target) && !profilePopup.contains(e.target)) {
+        profilePopup.classList.add('hidden');
+        profilePopup.classList.remove('popup-open');
+        userProfile.setAttribute('aria-expanded', 'false');
+      }
+    });
+
+    if (window.innerWidth >= 768) {
+      userProfile.addEventListener('mouseenter', () => {
+        profilePopup.classList.remove('hidden');
+        profilePopup.classList.add('popup-open');
+        userProfile.setAttribute('aria-expanded', 'true');
+      });
+      profilePopup.addEventListener('mouseleave', () => {
+        profilePopup.classList.add('hidden');
+        profilePopup.classList.remove('popup-open');
+        userProfile.setAttribute('aria-expanded', 'false');
+      });
+    }
+
+    // Password Management
+    let allPasswords = [];
+    async function loadPasswords(filter = '') {
+      try {
+        const response = await fetch('/api/passwords');
+        allPasswords = await response.json();
+        const passwordList = document.getElementById('password-list');
+        const emptyState = document.getElementById('empty-state');
+        passwordList.innerHTML = '';
+
+        document.getElementById('password-count').textContent = `${allPasswords.length} ${allPasswords.length === 1 ? 'password' : 'passwords'} stored`;
+
+        const filteredPasswords = allPasswords.filter(pw =>
+          pw.website.toLowerCase().includes(filter.toLowerCase()) ||
+          pw.username.toLowerCase().includes(filter.toLowerCase())
+        );
+
+        if (filteredPasswords.length === 0) {
+          emptyState.classList.remove('hidden');
+          passwordList.classList.add('hidden');
+          if (filter) {
+            emptyState.innerHTML = `
+              <div class="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <i class="fas fa-search text-3xl text-gray-400"></i>
+              </div>
+              <h3 class="text-lg font-medium text-gray-900">No passwords found</h3>
+              <p class="text-gray-500 mt-1">Try a different search term</p>
+            `;
+          }
+          return;
+        }
+
+        emptyState.classList.add('hidden');
+        passwordList.classList.remove('hidden');
+
+        filteredPasswords.forEach(pw => {
+          const div = document.createElement('div');
+          div.className = 'password-card bg-white border border-gray-200 p-4 rounded-xl shadow-sm hover:shadow-md transition-all';
+          div.innerHTML = `
+            <div class="flex items-start justify-between">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center space-x-3 mb-2">
+                  <div class="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <i class="fas fa-globe"></i>
+                  </div>
+                  <div>
+                    <h3 class="text-sm font-semibold text-gray-900 truncate">${pw.website}</h3>
+                    <p class="text-xs text-gray-500">Added ${formatDate(pw.createdAt)}</p>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3 text-sm text-gray-600 pl-13">
+                  <div class="flex items-center space-x-2">
+                    <i class="fas fa-user text-gray-400 w-4"></i>
+                    <span class="truncate">${pw.username}</span>
+                  </div>
+                  <div class="flex items-center space-x-2">
+                    <i class="fas fa-lock text-gray-400 w-4"></i>
+                    <span class="font-mono text-sm text-gray-800 hidden-password">${pw.password}</span>
+                    <button onclick="togglePasswordDisplay(this)" class="text-gray-400 hover:text-blue-600 ml-auto" aria-label="Toggle password visibility">
+                      <i class="far fa-eye"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="flex space-x-1 ml-3">
+                <button onclick="copyPassword('${pw.username}', '${pw.password}')" class="text-gray-400 hover:text-blue-600 p-2 rounded-lg hover:bg-blue-50 transition" title="Copy" aria-label="Copy password">
+                  <i class="far fa-copy"></i>
+                </button>
+                <button onclick="editPassword('${pw.id}', '${pw.website}', '${pw.username}', '${pw.password}')" class="text-gray-400 hover:text-blue-600 p-2 rounded-lg hover:bg-blue-50 transition" title="Edit" aria-label="Edit password">
+                  <i class="far fa-edit"></i>
+                </button>
+                <button onclick="deletePassword('${pw.id}')" class="text-gray-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition" title="Delete" aria-label="Delete password">
+                  <i class="far fa-trash-alt"></i>
+                </button>
+              </div>
+            </div>
+          `;
+          passwordList.appendChild(div);
+        });
+      } catch (error) {
+        console.error('Error loading passwords:', error);
+        showNotification('Failed to load passwords', 'error');
+      }
+    }
+
+    // Format Date
+    function formatDate(dateString) {
+      if (!dateString) return 'recently';
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    // Toggle Password Display
+    function togglePasswordDisplay(button) {
+      const passwordSpan = button.previousElementSibling;
+      const icon = button.querySelector('i');
+      if (passwordSpan.classList.contains('hidden-password')) {
+        passwordSpan.classList.remove('hidden-password');
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+      } else {
+        passwordSpan.classList.add('hidden-password');
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+      }
+    }
+
+    // Copy Password
+    function copyPassword(username, password) {
+      navigator.clipboard.writeText(password).then(() => {
+        showNotification('Password copied to clipboard!', 'success');
+      }).catch(err => {
+        console.error('Could not copy text: ', err);
+        showNotification('Failed to copy password', 'error');
+      });
+    }
+
+    // Toggle Password Visibility
+    function togglePasswordVisibility(inputId) {
+      const input = document.getElementById(inputId);
+      const toggle = input.nextElementSibling;
+      const icon = toggle.querySelector('i');
+
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+      } else {
+        input.type = 'password';
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+      }
+    }
+
+    // Password Strength
+    document.getElementById('password').addEventListener('input', function(e) {
+      const password = e.target.value;
+      const strengthBar = document.getElementById('password-strength-bar');
+      const strengthText = document.getElementById('password-strength-text');
+
+      strengthBar.className = 'password-strength h-1.5 rounded-full';
+      strengthText.className = 'text-xs ml-2';
+
+      if (password.length === 0) {
+        strengthBar.style.width = '0%';
+        strengthText.textContent = '';
+        return;
+      }
+
+      let strength = 0;
+      if (password.length > 10) strength += 1;
+      if (password.length > 16) strength += 1;
+      if (/[a-z]/.test(password)) strength += 1;
+      if (/[A-Z]/.test(password)) strength += 1;
+      if (/[0-9]/.test(password)) strength += 1;
+      if (/[^a-zA-Z0-9]/.test(password)) strength += 1;
+
+      if (strength <= 3) {
+        strengthBar.classList.add('weak');
+        strengthText.textContent = 'Weak';
+        strengthText.className = 'text-xs ml-2 text-red-500';
+      } else if (strength <= 5) {
+        strengthBar.classList.add('medium');
+        strengthText.textContent = 'Medium';
+        strengthText.className = 'text-xs ml-2 text-yellow-500';
+      } else if (strength <= 7) {
+        strengthBar.classList.add('strong');
+        strengthText.textContent = 'Strong';
+        strengthText.className = 'text-xs ml-2 text-green-500';
+      } else {
+        strengthBar.classList.add('very-strong');
+        strengthText.textContent = 'Very Strong';
+        strengthText.className = 'text-xs ml-2 text-green-600';
+      }
+    });
+
+    // Add Password
+    document.getElementById('password-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const website = document.getElementById('website').value;
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      const submitButton = e.target.querySelector('button[type="submit"]');
+      submitButton.disabled = true;
+      submitButton.innerHTML = `
+        <svg class="w-5 h-5 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12a8 8 0 1116 0 8 8 0 01-16 0z" />
+        </svg>
+        Saving...
+      `;
+
+      try {
+        const response = await fetch('/api/passwords', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ website, username, password })
+        });
+        if (response.ok) {
+          document.getElementById('password-form').reset();
+          document.getElementById('password-strength-bar').style.width = '0%';
+          document.getElementById('password-strength-text').textContent = '';
+          loadPasswords(document.getElementById('search').value);
+          showNotification('Password saved successfully!', 'success');
+        } else {
+          throw new Error('Failed to save password');
+        }
+      } catch (error) {
+        console.error('Error saving password:', error);
+        showNotification('Failed to save password', 'error');
+      } finally {
+        submitButton.disabled = false;
+        submitButton.innerHTML = `
+          <i class="fas fa-save"></i>
+          <span>Save Password</span>
+        `;
+      }
+    });
+
+    // Edit Password
+    function editPassword(id, website, username, password) {
+      const modal = document.getElementById('edit-password-modal');
+      document.getElementById('edit-id').value = id;
+      document.getElementById('edit-website').value = website;
+      document.getElementById('edit-username').value = username;
+      document.getElementById('edit-password').value = password;
+      modal.classList.remove('hidden');
+    }
+
+    // Save Edited Password
+    async function saveEditedPassword() {
+      const id = document.getElementById('edit-id').value;
+      const website = document.getElementById('edit-website').value;
+      const username = document.getElementById('edit-username').value;
+      const password = document.getElementById('edit-password').value;
+      const submitButton = document.querySelector('#edit-password-modal button[type="submit"]');
+      submitButton.disabled = true;
+      submitButton.innerHTML = `
+        <svg class="w-5 h-5 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12a8 8 0 1116 0 8 8 0 01-16 0z" />
+        </svg>
+        Saving...
+      `;
+
+      if (!website || !username || !password) {
+        showNotification('Please fill all fields', 'error');
+        submitButton.disabled = false;
+        submitButton.innerHTML = 'Save Changes';
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/passwords/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ website, username, password })
+        });
+        if (response.ok) {
+          closeEditPasswordModal();
+          loadPasswords(document.getElementById('search').value);
+          showNotification('Password updated successfully!', 'success');
+        } else {
+          throw new Error('Failed to update password');
+        }
+      } catch (error) {
+        console.error('Error updating password:', error);
+        showNotification('Failed to update password', 'error');
+      } finally {
+        submitButton.disabled = false;
+        submitButton.innerHTML = 'Save Changes';
+      }
+    }
+
+    // Close Edit Password Modal
+    function closeEditPasswordModal() {
+      document.getElementById('edit-password-modal').classList.add('hidden');
+    }
+
+    // Delete Password
+    async function deletePassword(id) {
+      if (confirm('Are you sure you want to delete this password? This action cannot be undone.')) {
+        try {
+          const response = await fetch(`/api/passwords/${id}`, { method: 'DELETE' });
+          if (response.ok) {
+            loadPasswords(document.getElementById('search').value);
+            showNotification('Password deleted successfully!', 'success');
+          } else {
+            throw new Error('Failed to delete password');
+          }
+        } catch (error) {
+          console.error('Error deleting password:', error);
+          showNotification('Failed to delete password', 'error');
+        }
+      }
+    }
+
+    // Notification
+    function showNotification(message, type) {
+      const notification = document.createElement('div');
+      notification.className = `fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center space-x-2 animate-fade-in z-50 ${
+        type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+      }`;
+      notification.innerHTML = `
+        <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-xmark-circle'}"></i>
+        <span>${message}</span>
+      `;
+      document.body.appendChild(notification);
+      setTimeout(() => {
+        notification.classList.remove('animate-fade-in');
+        notification.classList.add('animate-fade-out');
+        setTimeout(() => notification.remove(), 300);
+      }, 3000);
+    }
+
+    // Generate Random Password
+    function generateRandomPassword() {
+      document.getElementById('generate-password-modal').classList.remove('hidden');
+      updateGeneratedPassword();
+    }
+
+    // Close Generate Password Modal
+    function closeGeneratePasswordModal() {
+      document.getElementById('generate-password-modal').classList.add('hidden');
+    }
+
+    // Update Generated Password
+    function updateGeneratedPassword() {
+      const length = document.getElementById('password-length').value;
+      const uppercase = document.getElementById('uppercase').checked;
+      const lowercase = document.getElementById('lowercase').checked;
+      const numbers = document.getElementById('numbers').checked;
+      const symbols = document.getElementById('symbols').checked;
+
+      let charset = '';
+      if (uppercase) charset += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      if (lowercase) charset += 'abcdefghijklmnopqrstuvwxyz';
+      if (numbers) charset += '0123456789';
+      if (symbols) charset += '!@#$%^&*()_+-=[]{}|;:,.<>?';
+
+      if (!charset) {
+        document.getElementById('generated-password').value = 'Select at least one character type';
+        return;
+      }
+
+      let password = '';
+      for (let i = 0; i < length; i++) {
+        password += charset.charAt(Math.floor(Math.random() * charset.length));
+      }
+
+      document.getElementById('generated-password').value = password;
+    }
+
+    // Copy Generated Password
+    function copyGeneratedPassword() {
+      const password = document.getElementById('generated-password').value;
+      if (password && !password.includes('Select')) {
+        navigator.clipboard.writeText(password);
+        showNotification('Password copied to clipboard!', 'success');
+      }
+    }
+
+    // Use Generated Password
+    function useGeneratedPassword() {
+      const password = document.getElementById('generated-password').value;
+      if (password && !password.includes('Select')) {
+        document.getElementById('password').value = password;
+        document.getElementById('password').dispatchEvent(new Event('input'));
+        closeGeneratePasswordModal();
+      }
+    }
+
+    // Event Listeners for Password Generator
+    document.getElementById('password-length').addEventListener('input', function() {
+      document.getElementById('length-value').textContent = this.value;
+      updateGeneratedPassword();
+    });
+
+    ['uppercase', 'lowercase', 'numbers', 'symbols'].forEach(id => {
+      document.getElementById(id).addEventListener('change', updateGeneratedPassword);
+    });
+
+    // Real-time Search
+    document.getElementById('search').addEventListener('input', (e) => {
+      loadPasswords(e.target.value);
+    });
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      loadUserProfile();
+      loadPasswords();
+    });
+  </script>
+</body>
+</html>
