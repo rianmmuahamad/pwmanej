@@ -91,64 +91,50 @@ const isAuthenticated = (req, res, next) => {
   res.redirect('/');
 };
 
-  // Try to set up necessary database tables
-  const setupTables = async () => {
-    // Create users table if it doesn't exist
-    const usersExists = await db.schema.hasTable('users');
-    if (!usersExists) {
-      console.log('Creating users table...');
-      await db.schema.createTable('users', table => {
-        table.increments('id').primary();
-        table.string('google_id').unique().notNullable();
-        table.string('display_name').notNullable();
-        table.string('email');
-        table.timestamps(true, true);
-      });
-      console.log('Users table created successfully');
-    }
-    
-    // Create passwords table if it doesn't exist
-    const passwordsExists = await db.schema.hasTable('passwords');
-    if (!passwordsExists) {
-      console.log('Creating passwords table...');
-      await db.schema.createTable('passwords', table => {
-        table.increments('id').primary();
-        table.integer('user_id').notNullable().index();
-        table.string('website').notNullable();
-        table.string('username').notNullable();
-        table.string('password').notNullable();
-        table.timestamps(true, true);
-      });
-      console.log('Passwords table created successfully');
-    }
-    
-    // Create sessions table if it doesn't exist
-    const sessionsExists = await db.schema.hasTable('sessions');
-    if (!sessionsExists) {
-      console.log('Creating sessions table...');
-      await db.schema.createTable('sessions', table => {
-        table.string('sid').primary();
-        table.json('sess').notNullable();
-        table.timestamp('expired').notNullable().index();
-      });
-      console.log('Sessions table created successfully');
-    }
-    
-    return true;
-  };
-    
-    // Routes
-    setupRoutes();
-    
-    // Start server
-    const PORT = process.env.PORT || 3000;
-    app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+// Try to set up necessary database tables
+const setupTables = async () => {
+  // Create users table if it doesn't exist
+  const usersExists = await db.schema.hasTable('users');
+  if (!usersExists) {
+    console.log('Creating users table...');
+    await db.schema.createTable('users', table => {
+      table.increments('id').primary();
+      table.string('google_id').unique().notNullable();
+      table.string('display_name').notNullable();
+      table.string('email');
+      table.timestamps(true, true);
     });
-  } catch (err) {
-    console.error('Failed to initialize application:', err);
-    process.exit(1);
+    console.log('Users table created successfully');
   }
+  
+  // Create passwords table if it doesn't exist
+  const passwordsExists = await db.schema.hasTable('passwords');
+  if (!passwordsExists) {
+    console.log('Creating passwords table...');
+    await db.schema.createTable('passwords', table => {
+      table.increments('id').primary();
+      table.integer('user_id').notNullable().index();
+      table.string('website').notNullable();
+      table.string('username').notNullable();
+      table.string('password').notNullable();
+      table.timestamps(true, true);
+    });
+    console.log('Passwords table created successfully');
+  }
+  
+  // Create sessions table if it doesn't exist
+  const sessionsExists = await db.schema.hasTable('sessions');
+  if (!sessionsExists) {
+    console.log('Creating sessions table...');
+    await db.schema.createTable('sessions', table => {
+      table.string('sid').primary();
+      table.json('sess').notNullable();
+      table.timestamp('expired').notNullable().index();
+    });
+    console.log('Sessions table created successfully');
+  }
+  
+  return true;
 };
 
 // Set up all routes
@@ -341,6 +327,23 @@ const setupRoutes = () => {
     console.error('Unhandled error:', err);
     res.status(500).json({ error: 'Internal server error' });
   });
+};
+
+// Initialize the application
+const initializeApp = async () => {
+  try {
+    await setupTables();
+    setupRoutes();
+    
+    // Start server
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  } catch (err) {
+    console.error('Failed to initialize application:', err);
+    process.exit(1);
+  }
 };
 
 // Start the application
